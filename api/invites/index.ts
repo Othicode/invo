@@ -71,14 +71,18 @@ export default async function handler(
 
     if (inviteError) throw inviteError;
 
-    // 5. Audit Log
-    await supabase.from('audit_logs').insert([{
-      action: 'GENERATE_INVITE',
-      actor_id: created_by,
-      resource_id: invite.id,
-      resource_type: 'invite',
-      details: { shop_id, type, role }
-    }]);
+    // 5. Audit Log (Optional - don't fail if table doesn't exist yet)
+    try {
+      await supabase.from('audit_logs').insert([{
+        action: 'GENERATE_INVITE',
+        actor_id: created_by,
+        resource_id: invite.id,
+        resource_type: 'invite',
+        details: { shop_id, type, role }
+      }]);
+    } catch (e) {
+      console.warn('Audit log table missing or failed:', e);
+    }
 
     const baseUrl = process.env.VITE_APP_URL || 'https://localhost:5173';
     return res.status(201).json({ 

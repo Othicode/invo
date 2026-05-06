@@ -73,6 +73,28 @@ export const MainManagerDashboard: React.FC = () => {
   };
 
   const generateInvite = async (type: 'shop_specific' | 'general') => {
+    if (isMock) {
+      const token = Math.random().toString(36).substring(2, 15);
+      const baseUrl = window.location.origin;
+      const link = `${baseUrl}/register?token=${token}`;
+      
+      const invite = {
+        id: crypto.randomUUID(),
+        shop_id: type === 'shop_specific' ? selectedShopId : null,
+        token,
+        type,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        created_at: new Date().toISOString()
+      };
+      
+      const localInvites = JSON.parse(localStorage.getItem('invo_invites') || '[]');
+      localStorage.setItem('invo_invites', JSON.stringify([...localInvites, invite]));
+      
+      alert(`MOCK Token Generated: ${token}\nLink: ${link}`);
+      setIsModalOpen(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/invites', {
         method: 'POST',
