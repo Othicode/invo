@@ -17,6 +17,7 @@ function App() {
   const [view, setView] = useState<View>('dashboard');
   const [currentShopId, setCurrentShopId] = useState<string>('00000000-0000-0000-0000-000000000000');
   const [shops, setShops] = useState<any[]>([]);
+  const [userRole, setUserRole] = useState<'owner' | 'branch_manager' | 'attendant' | null>(null);
 
   // Mock user_id
   const USER_ID = '00000000-0000-0000-0000-000000000000';
@@ -29,49 +30,30 @@ function App() {
     return () => clearInterval(interval);
   }, [currentShopId]);
 
-  const checkReminders = async () => {
-    const now = new Date();
-    
-    if (isMock) {
-      const localReminders = JSON.parse(localStorage.getItem(`invo_reminders_${currentShopId}`) || '[]');
-      const dueReminders = localReminders.filter((r: any) => r.status === 'PENDING' && new Date(r.due_at) <= now);
-      
-      if (dueReminders.length > 0) {
-        dueReminders.forEach((r: any) => {
-          // Trigger notification
-          const notification = {
-            id: crypto.randomUUID(),
-            title: 'Inventory Update Required',
-            message: `Reminder: Please update details for "${r.product_name}".`,
-            is_read: false,
-            created_at: now.toISOString(),
-            type: 'warning',
-            action: `/inventory?prefill_name=${encodeURIComponent(r.product_name)}&prefill_id=${r.product_id}`
-          };
-          
-          const localNotifications = JSON.parse(localStorage.getItem(`invo_notifications_${currentShopId}`) || '[]');
-          localStorage.setItem(`invo_notifications_${currentShopId}`, JSON.stringify([notification, ...localNotifications]));
-          
-          // Mark reminder as triggered/dismissed in local storage to prevent loops
-          r.status = 'TRIGGERED';
-        });
-        localStorage.setItem(`invo_reminders_${currentShopId}`, JSON.stringify(localReminders));
-        
-        // Dispatch custom event to notify NotificationBell
-        window.dispatchEvent(new CustomEvent('notifications_updated'));
-      }
-    } else {
-      // In production, the backend /api/tasks (GET) already filters by due_at
-      // The NotificationBell component handles fetching these.
-    }
-  };
-  // --------------------------------
-
   useEffect(() => {
     fetchShops();
     window.addEventListener('shop_created', fetchShops);
     return () => window.removeEventListener('shop_created', fetchShops);
   }, []);
+
+  useEffect(() => {
+    if (currentShopId && currentShopId !== '00000000-0000-0000-0000-000000000000') {
+      fetchUserRole();
+    }
+  }, [currentShopId]);
+
+  const fetchUserRole = async () => {
+    try {
+      const response = await fetch(`/api/shops/role?user_id=${USER_ID}&shop_id=${currentShopId}`);
+      const data = await response.json();
+      if (response.ok) {
+        setUserRole(data.role);
+      }
+    } catch (e) {
+      // Mock fallback: if it's the default shop, assume owner
+      setUserRole(currentShopId.startsWith('0000') ? 'owner' : 'branch_manager');
+    }
+  };
 
   const fetchShops = async () => {
     try {
@@ -113,14 +95,14 @@ function App() {
 
       <nav className="app-nav">
         {[
-          { id: 'dashboard', label: 'Dashboard' },
-          { id: 'inventory', label: 'Inventory' },
-          { id: 'sales_page', label: 'Sales (POS)' },
-          { id: 'history', label: 'History' },
-          { id: 'shops', label: 'Settings' },
-          { id: 'main_manager', label: 'Owner View' },
-          { id: 'branch_manager', label: 'Branch View' }
-        ].map(tab => (
+          { id: 'dashboard', label: 'Dashboard', roles: ['owner', 'branch_manager', 'attendant'] },
+          { id: 'inventory', label: 'Inventory', roles: ['owner', 'branch_manager', 'attendant'] },
+          { id: 'sales_page', label: 'Sales (POS)', roles: ['owner', 'branch_manager', 'attendant'] },
+          { id: 'history', label: 'History', roles: ['owner', 'branch_manager'] },
+          { id: 'shops', label: 'Settings', roles: ['owner'] },
+          { id: 'main_manager', label: 'Owner View', roles: ['owner'] },
+          { id: 'branch_manager', label: 'Branch View', roles: ['branch_manager'] }
+        ].filter(tab => !userRole || tab.roles.includes(userRole)).map(tab => (
           <button 
             key={tab.id}
             onClick={() => setView(tab.id as View)}

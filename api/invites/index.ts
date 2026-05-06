@@ -59,7 +59,8 @@ export default async function handler(
       .from('invites')
       .insert([{ 
         shop_id: type === 'shop_specific' ? shop_id : null, 
-        role: role || 'attendant', 
+        target_shop_id: type === 'shop_specific' ? shop_id : null,
+        role: role || 'branch_manager', 
         token, 
         type,
         created_by,

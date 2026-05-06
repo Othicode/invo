@@ -11,12 +11,16 @@ CREATE TABLE profiles (
 CREATE TABLE shops (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     owner_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    parent_shop_id UUID REFERENCES shops(id) ON DELETE SET NULL, -- For child branches
     name TEXT NOT NULL,
     address TEXT,
     contact_details TEXT,
     business_type TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
+
+-- Index for parent-child relationship tracking
+CREATE INDEX idx_shops_parent_id ON shops(parent_shop_id);
 
 -- 3. User-Shop Roles (Multi-tenant access control)
 CREATE TYPE user_role AS ENUM ('owner', 'branch_manager', 'attendant');
@@ -138,8 +142,9 @@ CREATE TABLE sale_items (
 -- 7. Invites
 CREATE TABLE invites (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    shop_id UUID REFERENCES shops(id) ON DELETE CASCADE, -- NULL for general invite
-    role user_role NOT NULL DEFAULT 'attendant',
+    shop_id UUID REFERENCES shops(id) ON DELETE CASCADE, -- Source shop (the parent)
+    target_shop_id UUID REFERENCES shops(id) ON DELETE CASCADE, -- The branch being joined (if specific)
+    role user_role NOT NULL DEFAULT 'branch_manager',
     token TEXT NOT NULL UNIQUE,
     type TEXT NOT NULL CHECK (type IN ('shop_specific', 'general')),
     created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,

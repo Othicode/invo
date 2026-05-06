@@ -39,22 +39,35 @@ export default async function handler(
 
     // 3. Store Assignment & Role Creation
     // If shop_specific, assign the store. If general, just create account (no store assigned yet).
-    if (invite.type === 'shop_specific' && invite.shop_id) {
+    if (invite.type === 'shop_specific' && invite.target_shop_id) {
+      // Establish Parent-Child Relationship if the invite was created by a parent shop
+      if (invite.shop_id) {
+        const { error: relError } = await supabase
+          .from('shops')
+          .update({ parent_shop_id: invite.shop_id })
+          .eq('id', invite.target_shop_id);
+        
+        if (relError) console.error('Failed to establish parent relationship:', relError);
+      }
+
       const { error: roleError } = await supabase
         .from('user_shop_roles')
         .insert([{ 
           user_id, 
-          shop_id: invite.shop_id, 
+          shop_id: invite.target_shop_id, 
           role: invite.role // e.g., 'branch_manager'
         }]);
 
       if (roleError) {
         // Handle constraint violations (one-store-per-branch-manager)
-        if (roleError.code === '23505') {
+        if (roleError.code === '23505' || roleError.message.includes('branch_manager')) {
           return res.status(400).json({ error: 'User is already assigned as a branch manager elsewhere' });
         }
         throw roleError;
       }
+    } else {
+      // General Organization Invite: No store assignment, user starts independent
+      // We can optionally add a default role or just let them create their first shop
     }
 
     // 4. Mark link as used

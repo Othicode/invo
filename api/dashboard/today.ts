@@ -17,15 +17,46 @@ export default async function handler(
 
   try {
     // 1. Get all shops owned by or linked to this user
-    const { data: userShops, error: shopError } = await supabase
+    // Also include shops where this user is the owner (parent/main manager)
+    // AND any child shops (branches) of those owned shops
+    const { data: ownedShops, error: ownedError } = await supabase
+      .from('shops')
+      .select('id, name')
+      .eq('owner_id', user_id);
+
+    if (ownedError) throw ownedError;
+
+    const ownedShopIds = ownedShops.map(s => s.id);
+    
+    // Fetch child shops (branches)
+    let branchShopIds: string[] = [];
+    if (ownedShopIds.length > 0) {
+      const { data: branches, error: branchError } = await supabase
+        .from('shops')
+        .select('id, name')
+        .in('parent_shop_id', ownedShopIds);
+      
+      if (!branchError && branches) {
+        branchShopIds = branches.map(b => b.id);
+      }
+    }
+
+    // Also get shops where user has an explicit role (e.g. branch_manager)
+    const { data: roleShops, error: roleError } = await supabase
       .from('user_shop_roles')
       .select('shop_id, shops(name)')
       .eq('user_id', user_id);
 
-    if (shopError) throw shopError;
+    if (roleError) throw roleError;
 
-    const shopIds = userShops.map(s => s.shop_id);
-    if (shopIds.length === 0) {
+    // Combine all relevant shop IDs (Owned + Branches + Assigned Roles)
+    const allShopIds = Array.from(new Set([
+      ...ownedShopIds,
+      ...branchShopIds,
+      ...roleShops.map(s => s.shop_id)
+    ]));
+
+    if (allShopIds.length === 0) {
       return res.status(200).json({ total_today: 0, shops: [] });
     }
 
@@ -36,7 +67,7 @@ export default async function handler(
     const { data: salesData, error: salesError } = await supabase
       .from('sales')
       .select('shop_id, total_amount, shops(name)')
-      .in('shop_id', shopIds)
+      .in('shop_id', allShopIds)
       .gte('created_at', today.toISOString());
 
     if (salesError) throw salesError;
@@ -45,18 +76,29 @@ export default async function handler(
     const shopAggregation: Record<string, { name: string, total: number }> = {};
     let grandTotal = 0;
 
-    // Initialize with all user shops (even if 0 sales)
-    userShops.forEach((us: any) => {
-      shopAggregation[us.shop_id] = {
-        name: us.shops?.name || 'Unknown Shop',
-        total: 0
-      };
+    // Initialize with names (this is a bit tricky with multiple sources)
+    // We'll use a map for ID -> Name
+    const idToName: Record<string, string> = {};
+    ownedShops.forEach(s => idToName[s.id] = s.name);
+    roleShops.forEach(s => idToName[s.shop_id] = s.shops?.name || 'Assigned Store');
+    
+    // Fetch names for branches if not already in owned/role
+    const missingNames = branchShopIds.filter(id => !idToName[id]);
+    if (missingNames.length > 0) {
+      const { data: bNames } = await supabase.from('shops').select('id, name').in('id', missingNames);
+      bNames?.forEach(s => idToName[s.id] = s.name);
+    }
+
+    allShopIds.forEach(id => {
+      shopAggregation[id] = { name: idToName[id] || 'Unknown Store', total: 0 };
     });
 
     salesData?.forEach((sale: any) => {
       const amount = parseFloat(sale.total_amount);
-      shopAggregation[sale.shop_id].total += amount;
-      grandTotal += amount;
+      if (shopAggregation[sale.shop_id]) {
+        shopAggregation[sale.shop_id].total += amount;
+        grandTotal += amount;
+      }
     });
 
     const response = {
