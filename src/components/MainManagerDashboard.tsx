@@ -22,6 +22,9 @@ export const MainManagerDashboard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
   // Mock user_id (Main Manager)
   const USER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -73,6 +76,9 @@ export const MainManagerDashboard: React.FC = () => {
   };
 
   const generateInvite = async (type: 'shop_specific' | 'general') => {
+    setIsGenerating(true);
+    setGenError(null);
+
     if (isMock) {
       const token = Math.random().toString(36).substring(2, 15);
       const baseUrl = window.location.origin;
@@ -92,6 +98,7 @@ export const MainManagerDashboard: React.FC = () => {
       
       alert(`MOCK Token Generated: ${token}\nLink: ${link}`);
       setIsModalOpen(false);
+      setIsGenerating(false);
       return;
     }
 
@@ -106,16 +113,23 @@ export const MainManagerDashboard: React.FC = () => {
           created_by: USER_ID
         }),
       });
+      
       const result = await response.json();
+      
       if (response.ok) {
-        alert(`Token Generated: ${result.token}\nLink: ${result.link}`);
+        alert(`Invitation Generated!\n\nLink: ${result.link}\nToken: ${result.token}`);
+        setIsModalOpen(false);
       } else {
-        alert(result.error);
+        const errorMsg = result.details || result.error || 'Failed to generate invite';
+        setGenError(errorMsg);
+        console.error('Invite Generation Error:', result);
       }
-    } catch (err) {
-      alert('Failed to generate invite');
+    } catch (err: any) {
+      setGenError('Network error: Could not reach the server');
+      console.error('Network Error:', err);
+    } finally {
+      setIsGenerating(false);
     }
-    setIsModalOpen(false);
   };
 
   if (loading) return <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>Loading stores...</div>;
@@ -175,21 +189,35 @@ export const MainManagerDashboard: React.FC = () => {
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '2rem' }}>Choose the type of invitation for your branch manager.</p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {genError && (
+                <div style={{ padding: '0.75rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', marginBottom: '1rem', border: '1px solid var(--error)' }}>
+                  {genError}
+                </div>
+              )}
+              
               <button 
                 onClick={() => generateInvite('shop_specific')}
                 className="btn-primary"
+                disabled={isGenerating}
                 style={{ padding: '1rem' }}
               >
-                Specific Shop Invite
+                {isGenerating ? 'Generating...' : 'Specific Shop Invite'}
               </button>
               <button 
                 onClick={() => generateInvite('general')}
                 className="btn-secondary"
+                disabled={isGenerating}
                 style={{ padding: '1rem' }}
               >
-                General Organization Invite
+                {isGenerating ? 'Generating...' : 'General Organization Invite'}
               </button>
-              <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginTop: '1rem' }}>Cancel</button>
+              <button 
+                onClick={() => { setIsModalOpen(false); setGenError(null); }} 
+                disabled={isGenerating}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginTop: '1rem' }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

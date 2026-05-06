@@ -84,12 +84,25 @@ export default async function handler(
       console.warn('Audit log table missing or failed:', e);
     }
 
-    const baseUrl = process.env.VITE_APP_URL || 'https://localhost:5173';
+    const baseUrl = process.env.VITE_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
+    const inviteLink = `${baseUrl}/register?token=${invite.token}`;
+    
+    console.log(`Invite generated: ${inviteLink} for shop: ${shop_id}`);
+
     return res.status(201).json({ 
       token: invite.token,
-      link: `${baseUrl}/register?token=${invite.token}` 
+      link: inviteLink
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    console.error('CRITICAL: Invite generation failed:', {
+      error: err.message,
+      stack: err.stack,
+      body: req.body
+    });
+    return res.status(500).json({ 
+      error: 'Failed to generate invitation link',
+      details: err.message,
+      code: 'INTERNAL_SERVER_ERROR'
+    });
   }
 }
