@@ -53,7 +53,7 @@ export default async function handler(
     const allShopIds = Array.from(new Set([
       ...ownedShopIds,
       ...branchShopIds,
-      ...roleShops.map(s => s.shop_id)
+      ...(roleShops || []).map(s => s.shop_id)
     ]));
 
     if (allShopIds.length === 0) {
@@ -79,14 +79,17 @@ export default async function handler(
     // Initialize with names (this is a bit tricky with multiple sources)
     // We'll use a map for ID -> Name
     const idToName: Record<string, string> = {};
-    ownedShops.forEach(s => idToName[s.id] = s.name);
-    roleShops.forEach(s => idToName[s.shop_id] = s.shops?.name || 'Assigned Store');
+    ownedShops?.forEach(s => idToName[s.id] = s.name);
+    roleShops?.forEach((s: any) => {
+      const shop = Array.isArray(s.shops) ? s.shops[0] : s.shops;
+      idToName[s.shop_id] = shop?.name || 'Assigned Store';
+    });
     
     // Fetch names for branches if not already in owned/role
     const missingNames = branchShopIds.filter(id => !idToName[id]);
     if (missingNames.length > 0) {
       const { data: bNames } = await supabase.from('shops').select('id, name').in('id', missingNames);
-      bNames?.forEach(s => idToName[s.id] = s.name);
+      bNames?.forEach((s: any) => idToName[s.id] = s.name);
     }
 
     allShopIds.forEach(id => {

@@ -55,6 +55,43 @@ function App() {
     }
   };
 
+  const checkReminders = async () => {
+    const now = new Date();
+    
+    if (isMock) {
+      const localReminders = JSON.parse(localStorage.getItem(`invo_reminders_${currentShopId}`) || '[]');
+      const dueReminders = localReminders.filter((r: any) => r.status === 'PENDING' && new Date(r.due_at) <= now);
+      
+      if (dueReminders.length > 0) {
+        dueReminders.forEach((r: any) => {
+          // Trigger notification
+          const notification = {
+            id: crypto.randomUUID(),
+            title: 'Inventory Update Required',
+            message: `Reminder: Please update details for "${r.product_name}".`,
+            is_read: false,
+            created_at: now.toISOString(),
+            type: 'warning',
+            action: `/inventory?prefill_name=${encodeURIComponent(r.product_name)}&prefill_id=${r.product_id}`
+          };
+          
+          const localNotifications = JSON.parse(localStorage.getItem(`invo_notifications_${currentShopId}`) || '[]');
+          localStorage.setItem(`invo_notifications_${currentShopId}`, JSON.stringify([notification, ...localNotifications]));
+          
+          // Mark reminder as triggered/dismissed in local storage to prevent loops
+          r.status = 'TRIGGERED';
+        });
+        localStorage.setItem(`invo_reminders_${currentShopId}`, JSON.stringify(localReminders));
+        
+        // Dispatch custom event to notify NotificationBell
+        window.dispatchEvent(new CustomEvent('notifications_updated'));
+      }
+    } else {
+      // In production, the backend /api/tasks (GET) already filters by due_at
+      // The NotificationBell component handles fetching these.
+    }
+  };
+
   const fetchShops = async () => {
     try {
       const response = await fetch(`/api/shops?user_id=${USER_ID}`);
