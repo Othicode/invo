@@ -19,12 +19,10 @@ interface NotificationBellProps {
 export const NotificationBell: React.FC<NotificationBellProps> = ({ userId, shopId }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const { playNotification, preferences, toggleMute, setVolume } = useAudioNotification();
   const [showSettings, setShowSettings] = useState(false);
 
   const fetchNotifications = async (isNew = false) => {
-    setLoading(true);
     try {
       if (isMock) {
         const localNotifications = JSON.parse(localStorage.getItem(`invo_notifications_${shopId}`) || '[]');
@@ -58,8 +56,6 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ userId, shop
       console.error('Failed to fetch notifications', error);
       const localNotifications = JSON.parse(localStorage.getItem(`invo_notifications_${shopId}`) || '[]');
       setNotifications(localNotifications);
-    } finally {
-      setLoading(false);
     }
   };
 

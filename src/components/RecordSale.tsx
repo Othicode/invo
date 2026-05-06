@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 type Product = {
   id: string;
   name: string;
   price: number;
   currency: string;
-  variation_name?: string;
+  variation_name?: string | null;
 };
 
 type SearchResult = {
@@ -15,17 +15,14 @@ type SearchResult = {
 };
 
 export const RecordSale: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult>({ results: [], exact_match: false, exact_match_id: null });
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', price: '', variation: '', isVariation: false, parentId: '' });
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const SHOP_ID = '00000000-0000-0000-0000-000000000000';
-  const USER_ID = '00000000-0000-0000-0000-000000000000';
 
   // --- Intelligent Search & Duplicate Detection ---
   useEffect(() => {
